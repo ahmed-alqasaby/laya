@@ -99,6 +99,23 @@ def rows_soft_acc(preds: list[np.ndarray], teachers: list[np.ndarray]) -> float 
     return float(np.mean(vals)) if vals else None
 
 
+def rows_soft_acc_gold(preds: list[np.ndarray], y_idx: list[int]) -> float | None:
+    """Mean probability mass the model assigns to the gold class.
+
+    Computable for every cell (unlike soft_acc, which needs a gold *teacher
+    distribution*). For cells with only hard labels this is the natural
+    soft-accuracy reading: how much probability lands on the right answer,
+    averaged over rows.
+    """
+    vals: list[float] = []
+    for p, y in zip(preds, y_idx):
+        p = np.asarray(p, dtype=float)
+        if p.ndim != 1 or not (0 <= int(y) < p.size):
+            continue
+        vals.append(float(p[int(y)]))
+    return float(np.mean(vals)) if vals else None
+
+
 def fit_temperature(logits: np.ndarray, y_idx: np.ndarray) -> float | None:
     logits = np.asarray(logits, dtype=float)
     y_idx = np.asarray(y_idx)

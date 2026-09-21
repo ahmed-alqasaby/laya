@@ -41,7 +41,7 @@ What it does:
    probe call, so the adapter can be tightened against the real API), and
    `summary.md` + `run_meta.json`, zipped to `laya-artifacts.zip`.
 
-Grid cells (v0-baseline-r2): typed-decisions (gold + teacher dists),
+Grid cells (v0-baseline-r3): typed-decisions (gold + teacher dists),
 Banking77 (cardinality), SST-5 (ordinal proxy), XNLI en + **XNLI Thai**
 (OOD stress; XNLI ships no Khmer config, true Khmer comes from the local
 `evaldata/novelty.jsonl` hook). Local cells in `configs/eval_grid.yaml`
@@ -64,7 +64,7 @@ Continues training from the `typed-decisions` specialist on C2 objectives:
 
 The trained checkpoint is saved self-contained at `/kaggle/working/osm-v0/`
 (rl_agent_config.json + model.safetensors + encoder/ + tokenizer/), verified by
-reloading through the real `laya` SDK, then eval'd on the **same `v0-baseline-r2`
+reloading through the real `laya` SDK, then eval'd on the **same `v0-baseline-r3`
 grid** (via `run_grid(force_variants=["osm-v0"])`, so the frozen grid config needs
 no edits). `telemetry.jsonl` (loss + val ECE/temperature curve) rides in the zip.
 

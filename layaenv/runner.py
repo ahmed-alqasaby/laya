@@ -13,7 +13,7 @@ from . import backends, datasets, metrics
 from .grid import Cell, load_grid
 from .schema import ReportRow, render_metric_table, rows_to_jsonl
 
-BREAKDOWN_KEYS = ("argmax_acc", "soft_acc", "raw_ece", "postfit_ece", "ordinal_mae", "n")
+BREAKDOWN_KEYS = ("argmax_acc", "soft_acc", "soft_acc_gold", "raw_ece", "postfit_ece", "ordinal_mae", "n")
 
 
 def _normalize_instance(inst: datasets.Inst, out: dict) -> dict:
@@ -165,7 +165,7 @@ def _group_instances(insts: list[datasets.Inst]) -> list[list[tuple[int, dataset
 
 def _overall_metrics(ok: list[dict]) -> dict:
     m: dict[str, Any] = {k: None for k in (
-        "argmax_acc", "soft_acc", "raw_ece", "postfit_ece", "temperature", "ordinal_mae",
+        "argmax_acc", "soft_acc", "soft_acc_gold", "raw_ece", "postfit_ece", "temperature", "ordinal_mae",
         "escalation_auroc", "selective_auroc", "precision_at_escalation", "risk_coverage_auc",
         "option_order_robustness")}
 
@@ -178,6 +178,7 @@ def _overall_metrics(ok: list[dict]) -> dict:
         probs = [np.asarray(n["probs"], dtype=float) for n in mc]
         y = [int(n["y_idx"]) for n in mc]
         m["argmax_acc"] = float(np.mean([int(p.argmax()) == yv for p, yv in zip(probs, y)]))
+        m["soft_acc_gold"] = metrics.rows_soft_acc_gold(probs, y)
         m["raw_ece"] = metrics.rows_cal_ece(probs, y)
         m["temperature"], m["postfit_ece"] = metrics.rows_fit_temperature(probs, y)
         with_t = [n for n in mc if n["teacher"] is not None]
@@ -206,7 +207,7 @@ def _per_question_type(ok: list[dict]) -> dict:
     out = {}
     for qt in ("choice", "score", "noul"):
         sel = [n for n in ok if n["qtype"] == qt]
-        d: dict[str, Any] = {"argmax_acc": None, "soft_acc": None, "raw_ece": None, "postfit_ece": None, "ordinal_mae": None, "n": len(sel)}
+        d: dict[str, Any] = {"argmax_acc": None, "soft_acc": None, "soft_acc_gold": None, "raw_ece": None, "postfit_ece": None, "ordinal_mae": None, "n": len(sel)}
         if not sel:
             out[qt] = d
             continue
@@ -217,6 +218,7 @@ def _per_question_type(ok: list[dict]) -> dict:
         if mc:
             probs = [np.asarray(n["probs"], dtype=float) for n in mc]
             y = [int(n["y_idx"]) for n in mc]
+            d["soft_acc_gold"] = metrics.rows_soft_acc_gold(probs, y)
             d["raw_ece"] = metrics.rows_cal_ece(probs, y)
             t, post = metrics.rows_fit_temperature(probs, y)
             if post is not None:

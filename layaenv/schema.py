@@ -9,6 +9,7 @@ SCHEMA_VERSION = "1.0"
 METRIC_KEYS = (
     "argmax_acc",
     "soft_acc",
+    "soft_acc_gold",
     "raw_ece",
     "postfit_ece",
     "temperature",
@@ -80,7 +81,7 @@ def rows_from_jsonl(path: str) -> list[ReportRow]:
 
 
 def render_metric_table(rows: list[ReportRow]) -> str:
-    header = ["cell", "checkpoint", "n", "argmax_acc", "soft_acc", "raw_ece", "postfit_ece", "ordinal_mae", "sel_auroc"]
+    header = ["cell", "checkpoint", "n", "argmax_acc", "soft_acc", "soft_acc_gold", "raw_ece", "postfit_ece", "ordinal_mae", "sel_auroc"]
     lines = [" | ".join(header), " | ".join(["---"] * len(header))]
     for r in rows:
         m = r.metrics
@@ -90,6 +91,7 @@ def render_metric_table(rows: list[ReportRow]) -> str:
             str(r.n_instances),
             _fmt(m.get("argmax_acc")),
             _fmt(m.get("soft_acc")),
+            _fmt(m.get("soft_acc_gold")),
             _fmt(m.get("raw_ece")),
             _fmt(m.get("postfit_ece")),
             _fmt(m.get("ordinal_mae")),

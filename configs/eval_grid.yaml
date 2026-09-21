@@ -11,7 +11,10 @@
 # processor -> how a dataset's rows map to the laya `predict` interface
 #              (typed_decisions | banking77 | xnli | sst5 | local)
 schema_version: "1.0"
-grid_tag: "v0-baseline-r2"
+# r3: schema 1.0 + soft_acc_gold (mean probability mass on gold) so cells
+# without gold teacher distributions (banking77 / sst5 / xnli) no longer have
+# a blank soft-accuracy column. Teacher-matching soft_acc unchanged.
+grid_tag: "v0-baseline-r3"
 
 cells:
   # -- flagship: the four typed-decisions workflows, with gold + teacher
