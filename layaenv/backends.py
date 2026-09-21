@@ -79,6 +79,8 @@ def extract_answer(res: dict, qname: str) -> dict:
         try:
             import numpy as np
 
+            if isinstance(v, dict):
+                v = list(v.values())
             arr = np.asarray(v, dtype=float).ravel()
             if arr.size == 0:
                 continue

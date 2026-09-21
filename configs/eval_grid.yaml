@@ -11,7 +11,7 @@
 # processor -> how a dataset's rows map to the laya `predict` interface
 #              (typed_decisions | banking77 | xnli | sst5 | local)
 schema_version: "1.0"
-grid_tag: "v0-baseline-r1"
+grid_tag: "v0-baseline-r2"
 
 cells:
   # -- flagship: the four typed-decisions workflows, with gold + teacher
@@ -28,7 +28,9 @@ cells:
     max_instances: 0
 
   # -- cardinality axis: 77-option intent classification (the Banking77
-  #    72-vs-77 confound this project exists to fix) --
+  #    72-vs-77 confound this project exists to fix). Note the *-server has no
+  #    parquet for PolyAI/banking77 (script-only), so this uses the maintained
+  #    legacy mirror with identical rows and the canonical label names. --
   - id: banking77-cardinality
     domain: banking
     split: id
@@ -37,7 +39,7 @@ cells:
     source: hf
     processor: banking77
     dataset:
-      hf: {repo: PolyAI/banking77, split: test}
+      hf: {repo: legacy-datasets/banking77, config: default, split: test}
     max_instances: 1000
 
   # -- ordinal rubric proxy: 5-class sentiment used to exercise the score
@@ -53,8 +55,10 @@ cells:
       hf: {repo: SetFit/sst5, split: test}
     max_instances: 1000
 
-  # -- OOD / script stress: the Khmer failure mode (confident + wrong) is
-  #    the canonical escalate-gate target --
+  # -- OOD / script stress: the non-Latin confident-wrong failure mode is the
+  #    canonical escalate-gate target. Thai is the closest non-Latin script
+  #    with public labeled data; true Khmer judgment comes from the local
+  #    novelty cell once evaldata/novelty.jsonl lands --
   - id: xnli-en
     domain: nli
     split: id
@@ -66,7 +70,7 @@ cells:
       hf: {repo: facebook/xnli, config: en, split: test}
     max_instances: 1000
 
-  - id: xnli-khmer-ood
+  - id: xnli-thai-ood
     domain: nli
     split: novelty
     question_types: [choice]
@@ -74,7 +78,7 @@ cells:
     source: hf
     processor: xnli
     dataset:
-      hf: {repo: facebook/xnli, config: khmer, split: test}
+      hf: {repo: facebook/xnli, config: th, split: test}
     max_instances: 1000
 
 # -- local hooks: data lands in evaldata/ and these cells activate the moment

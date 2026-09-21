@@ -71,19 +71,26 @@ def _normalize_instance(inst: datasets.Inst, out: dict) -> dict:
         expected = None
         if isinstance(out.get("score"), (int, float)):
             expected = float(out["score"])
-        elif out.get("probs") is not None and inst.option_levels is not None:
+        if out.get("probs") is not None and inst.option_levels is not None:
             p = out["probs"]
             levels = np.asarray(inst.option_levels, dtype=float)
             if len(p) == len(levels):
-                expected = float(np.dot(p, levels))
                 norm["probs"] = p
                 norm["conf"] = float(p.max())
+                if expected is None:
+                    expected = float(np.dot(p, levels))
         norm["ord_expected"] = expected
-        if inst.ordinal_value is not None and expected is not None:
-            if inst.option_levels is not None:
-                levels = np.asarray(inst.option_levels, dtype=float)
+        if inst.option_levels is not None:
+            levels = np.asarray(inst.option_levels, dtype=float)
+            if norm["probs"] is not None:
+                norm["pred_idx"] = int(np.argmax(norm["probs"]))
+            elif expected is not None:
                 norm["pred_idx"] = int(np.abs(levels - expected).argmin())
+            if inst.ordinal_value is not None:
                 norm["y_idx"] = int(np.abs(levels - inst.ordinal_value).argmin())
+            elif isinstance(inst.answer_idx, int):
+                norm["y_idx"] = inst.answer_idx
+            if norm["pred_idx"] is not None and norm["y_idx"] is not None:
                 norm["correct"] = bool(norm["pred_idx"] == norm["y_idx"])
     return norm
 
@@ -168,22 +175,17 @@ def _overall_metrics(ok: list[dict]) -> dict:
 
     mc = [n for n in ok if n["probs"] is not None and n["y_idx"] is not None and n["correct"] is not None]
     if mc:
-        probs = np.array([n["probs"] for n in mc])
-        y = np.array([n["y_idx"] for n in mc])
-        m["argmax_acc"] = float(np.mean(np.argmax(probs, axis=1) == y))
-        m["raw_ece"] = metrics.cal_ece(probs, y)
-        logits = metrics.probs_to_logits(probs)
-        t = metrics.fit_temperature(logits, y)
-        if t is not None:
-            m["temperature"] = t
-            m["postfit_ece"] = metrics.cal_ece(metrics.scaled_probs(logits, t), y)
-
-        teachers = [n["teacher"] for n in mc if n["teacher"] is not None]
-        if teachers and all(not isinstance(tq, list) or len(tq) == len(mc[0]["probs"]) for tq in teachers):
-            p = np.array([n["probs"] for n in mc if n["teacher"] is not None])
-            q = np.array([n["teacher"] for n in mc if n["teacher"] is not None])
-            if p.shape == q.shape:
-                m["soft_acc"] = metrics.soft_acc(p, q)
+        probs = [np.asarray(n["probs"], dtype=float) for n in mc]
+        y = [int(n["y_idx"]) for n in mc]
+        m["argmax_acc"] = float(np.mean([int(p.argmax()) == yv for p, yv in zip(probs, y)]))
+        m["raw_ece"] = metrics.rows_cal_ece(probs, y)
+        m["temperature"], m["postfit_ece"] = metrics.rows_fit_temperature(probs, y)
+        with_t = [n for n in mc if n["teacher"] is not None]
+        if with_t:
+            m["soft_acc"] = metrics.rows_soft_acc(
+                [np.asarray(n["probs"], dtype=float) for n in with_t],
+                [np.asarray(n["teacher"], dtype=float) for n in with_t],
+            )
 
     pairs = [(n["conf"], n["correct"]) for n in ok if n["conf"] is not None and n["correct"] is not None]
     if pairs:
@@ -213,16 +215,18 @@ def _per_question_type(ok: list[dict]) -> dict:
             d["argmax_acc"] = float(np.mean(accs))
         mc = [n for n in sel if n["probs"] is not None and n["y_idx"] is not None and n["correct"] is not None]
         if mc:
-            probs = np.array([n["probs"] for n in mc])
-            y = np.array([n["y_idx"] for n in mc])
-            d["raw_ece"] = metrics.cal_ece(probs, y)
-            t = metrics.fit_temperature(metrics.probs_to_logits(probs), y)
-            if t is not None:
-                d["postfit_ece"] = metrics.cal_ece(metrics.scaled_probs(metrics.probs_to_logits(probs), t), y)
-            p = np.array([n["probs"] for n in mc if n["teacher"] is not None])
-            q = np.array([n["teacher"] for n in mc if n["teacher"] is not None])
-            if p.shape == q.shape and len(p):
-                d["soft_acc"] = metrics.soft_acc(p, q)
+            probs = [np.asarray(n["probs"], dtype=float) for n in mc]
+            y = [int(n["y_idx"]) for n in mc]
+            d["raw_ece"] = metrics.rows_cal_ece(probs, y)
+            t, post = metrics.rows_fit_temperature(probs, y)
+            if post is not None:
+                d["postfit_ece"] = post
+            with_t = [n for n in mc if n["teacher"] is not None]
+            if with_t:
+                d["soft_acc"] = metrics.rows_soft_acc(
+                    [np.asarray(n["probs"], dtype=float) for n in with_t],
+                    [np.asarray(n["teacher"], dtype=float) for n in with_t],
+                )
         if qt == "score":
             scored = [n for n in sel if n["ord_expected"] is not None and n["ord_gold"] is not None]
             if scored:

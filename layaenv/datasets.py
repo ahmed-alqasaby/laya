@@ -52,6 +52,16 @@ def _question_options(question: dict) -> list[str]:
     return []
 
 
+def _probs_by_options(probs: Any, options: Optional[list[str]]) -> Optional[list[float]]:
+    """Teacher distribution from a {option_label -> probability} dict, aligned to options order."""
+    if not isinstance(probs, dict) or not options:
+        return None
+    vals = [probs.get(o) for o in options]
+    if any(not isinstance(v, (int, float)) for v in vals):
+        return None
+    return [float(v) for v in vals]
+
+
 def typed_decisions_rows(ds_rows: list[dict]) -> list[Inst]:
     out: list[Inst] = []
     for r in ds_rows:
@@ -69,6 +79,9 @@ def typed_decisions_rows(ds_rows: list[dict]) -> list[Inst]:
                 continue
             qtype = str(q.get("type") or "choice")
             options = _question_options(q) if qtype in ("choice", "noul") else None
+            g = gold.get(qname) if isinstance(gold, dict) else None
+            if not isinstance(g, dict):
+                g = {k: r.get(f"{qname}__{k}") for k in ("label", "score", "probabilities")}
             inst = Inst(
                 id=f"{r.get('id')}__{qname}",
                 state=state,
@@ -80,34 +93,58 @@ def typed_decisions_rows(ds_rows: list[dict]) -> list[Inst]:
                 cardinality=len(options) if options else 0,
             )
             if qtype in ("choice", "noul") and options is not None:
-                gold_ans = None
-                if isinstance(gold, dict):
-                    gold_ans = gold.get(qname)
-                if gold_ans is None:
-                    gold_ans = r.get(f"{qname}__label")
-                if gold_ans is not None and str(gold_ans) in options:
-                    inst.answer = str(gold_ans)
-                    inst.answer_idx = options.index(str(gold_ans))
-                probs = r.get(f"{qname}__probabilities")
-                if probs is not None:
-                    if isinstance(probs, str):
-                        try:
-                            probs = json.loads(probs)
-                        except Exception:
-                            probs = None
-                    if isinstance(probs, (list, tuple)) and len(probs) == len(options):
-                        inst.teacher = [float(x) for x in probs]
+                inst.answer = g.get("label")
+                if inst.answer is not None and str(inst.answer) in options:
+                    inst.answer_idx = options.index(str(inst.answer))
+                inst.teacher = _probs_by_options(g.get("probabilities"), options)
             if qtype == "score":
-                score = r.get(f"{qname}__score")
-                if score is not None:
-                    inst.ordinal_value = float(score)
-                inst.option_levels = None
+                inst.answer = g.get("label")
+                if isinstance(g.get("score"), (int, float)):
+                    inst.ordinal_value = float(g["score"])
+                crit = q.get("criteria")
+                if isinstance(crit, list):
+                    inst.option_levels = [float(i) for i in range(len(crit))]
+                inst.teacher = _probs_by_options(g.get("probabilities"), [str(i) for i in range(len(crit))] if isinstance(crit, list) else None)
             out.append(inst)
     return out
 
 
+BANKING77_LABELS = [
+    "activate_my_card", "age_limit", "apple_pay_or_google_pay", "atm_support",
+    "automatic_top_up", "balance_not_updated_after_bank_transfer",
+    "balance_not_updated_after_cheque_or_cash_deposit", "beneficiary_not_allowed",
+    "cancel_transfer", "card_about_to_expire", "card_acceptance", "card_arrival",
+    "card_delivery_estimate", "card_linking", "card_not_working",
+    "card_payment_fee_charged", "card_payment_not_recognised",
+    "card_payment_wrong_exchange_rate", "card_swallowed",
+    "cash_withdrawal_charge", "cash_withdrawal_not_recognised", "change_pin",
+    "compromised_card", "contactless_not_working", "country_support",
+    "declined_card_payment", "declined_cash_withdrawal", "declined_transfer",
+    "direct_debit_payment_not_recognised", "disposable_card_limits",
+    "edit_personal_details", "exchange_charge", "exchange_rate",
+    "exchange_via_app", "extra_charge_on_statement", "failed_transfer",
+    "fiat_currency_support", "get_disposable_virtual_card", "get_physical_card",
+    "getting_spare_card", "getting_virtual_card", "lost_or_stolen_card",
+    "lost_or_stolen_phone", "order_physical_card", "passcode_forgotten",
+    "pending_card_payment", "pending_cash_withdrawal", "pending_top_up",
+    "pending_transfer", "pin_blocked", "receiving_money",
+    "Refund_not_showing_up", "request_refund", "reverted_card_payment?",
+    "supported_cards_and_currencies", "terminate_account",
+    "top_up_by_bank_transfer_charge", "top_up_by_card_charge",
+    "top_up_by_cash_or_cheque", "top_up_failed", "top_up_limits",
+    "top_up_reverted", "topping_up_by_card", "transaction_charged_twice",
+    "transfer_fee_charged", "transfer_into_account",
+    "transfer_not_received_by_recipient", "transfer_timing",
+    "unable_to_verify_identity", "verify_my_identity", "verify_source_of_funds",
+    "verify_top_up", "virtual_card_not_working", "visa_or_mastercard",
+    "why_verify_identity", "wrong_amount_of_cash_received",
+    "wrong_exchange_rate_for_cash_withdrawal",
+]
+
+
 def banking77_rows(ds_rows: list[dict], label_names: list[str]) -> list[Inst]:
     out: list[Inst] = []
+    label_names = label_names or BANKING77_LABELS
     for r in ds_rows:
         text = str(r.get("text") or "")
         label = int(r.get("label") or 0)

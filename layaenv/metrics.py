@@ -38,6 +38,67 @@ def cal_ece(probs: np.ndarray, y_idx: np.ndarray, n_bins: int = 15) -> float | N
     return float(np.sum(weight * np.abs(acc - avg_conf)))
 
 
+def rows_cal_ece(probs: list[np.ndarray], y_idx: list | np.ndarray, n_bins: int = 15) -> float | None:
+    """Calibration across a *list* of varying-width distributions (different option counts)."""
+    if not probs:
+        return None
+    conf = np.array([p.max() for p in probs], dtype=float)
+    correct = np.array([int(p.argmax()) == int(yv) for p, yv in zip(probs, y_idx)], dtype=float)
+    edges = np.linspace(0.0, 1.0, n_bins + 1)
+    acc = np.zeros(n_bins)
+    avg_conf = np.zeros(n_bins)
+    weight = np.zeros(n_bins)
+    for i in range(n_bins):
+        lo, hi = edges[i], edges[i + 1]
+        sel = conf <= hi if i == 0 else (conf > lo) & (conf <= hi)
+        if sel.sum() == 0:
+            continue
+        weight[i] = sel.mean()
+        acc[i] = correct[sel].mean()
+        avg_conf[i] = conf[sel].mean()
+    w = weight.sum()
+    if w == 0:
+        return None
+    return float(np.sum(weight * np.abs(acc - avg_conf)))
+
+
+def rows_fit_temperature(probs: list[np.ndarray], y_idx: list | np.ndarray) -> tuple[float | None, float | None]:
+    """Post-fit temperature across varying-width distributions, n-weighted across option-count groups."""
+    by_k: dict[int, list[int]] = {}
+    for i, p in enumerate(probs):
+        by_k.setdefault(len(p), []).append(i)
+    n = len(probs)
+    temps, post_eces, wts = [], [], []
+    for k, idx in by_k.items():
+        if len(idx) < 2:
+            continue
+        P = np.array([probs[i] for i in idx], dtype=float)
+        Y = np.array([y_idx[i] for i in idx])
+        logits = probs_to_logits(P)
+        t = fit_temperature(logits, Y)
+        if t is None:
+            continue
+        e = cal_ece(scaled_probs(logits, t), Y)
+        temps.append(t)
+        wts.append(len(idx))
+        post_eces.append(e if e is not None else float("nan"))
+    if not temps:
+        return None, None
+    w = np.sum(wts)
+    t_out = float(np.average(temps, weights=wts))
+    e_out = float(np.average([e for e in post_eces if not np.isnan(e)], weights=[w for w, e in zip(wts, post_eces) if not np.isnan(e)])) if any(not np.isnan(e) for e in post_eces) else None
+    return (t_out, e_out) if e_out is not None else (t_out, None)
+
+
+def rows_soft_acc(preds: list[np.ndarray], teachers: list[np.ndarray]) -> float | None:
+    vals: list[float] = []
+    for p, q in zip(preds, teachers):
+        if p.shape != q.shape:
+            continue
+        vals.append(1.0 - 0.5 * float(np.abs(p - q).sum()))
+    return float(np.mean(vals)) if vals else None
+
+
 def fit_temperature(logits: np.ndarray, y_idx: np.ndarray) -> float | None:
     logits = np.asarray(logits, dtype=float)
     y_idx = np.asarray(y_idx)
