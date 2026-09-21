@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+reports/*.jsonl
+reports/*.zip
+reports/summary.md
+reports/run_meta.json
+laya-artifacts.zip
+evaldata/*.jsonl
+.tmp_*

@@ -1,0 +1,102 @@
+# Frozen evaluation grid, schema v1.0
+#
+# Every gate number in this project is a cell in this grid or it is
+# unfalsifiable. Cells whose eval data is not reachable are skipped and
+# reported in run_meta.json.skipped_cells — never silently dropped.
+#
+# source: hf   -> pulled from Hugging Face datasets inside the notebook
+# source: local -> read from evaldata/<file> (documented JSONL format in
+#                  evaldata/README.md). Drop the human's private sets there.
+#
+# processor -> how a dataset's rows map to the laya `predict` interface
+#              (typed_decisions | banking77 | xnli | sst5 | local)
+schema_version: "1.0"
+grid_tag: "v0-baseline-r1"
+
+cells:
+  # -- flagship: the four typed-decisions workflows, with gold + teacher
+  #    distributions baked into the dataset (LocalLLaMA/typed-decisions) --
+  - id: typed-decisions-core
+    domain: typed-decisions
+    split: id
+    question_types: [choice, noul, score]
+    models: [english, multilingual, typed_decisions, router]
+    source: hf
+    processor: typed_decisions
+    dataset:
+      hf: {repo: LocalLLaMA/typed-decisions, config: all, split: test}
+    max_instances: 0
+
+  # -- cardinality axis: 77-option intent classification (the Banking77
+  #    72-vs-77 confound this project exists to fix) --
+  - id: banking77-cardinality
+    domain: banking
+    split: id
+    question_types: [choice]
+    models: [english, multilingual, typed_decisions, router]
+    source: hf
+    processor: banking77
+    dataset:
+      hf: {repo: PolyAI/banking77, split: test}
+    max_instances: 1000
+
+  # -- ordinal rubric proxy: 5-class sentiment used to exercise the score
+  #    primitive before the real 6-domain ordinal sets land in evaldata/ --
+  - id: sst5-ordinal-proxy
+    domain: sentiment
+    split: id
+    question_types: [score]
+    models: [english, typed_decisions, router]
+    source: hf
+    processor: sst5
+    dataset:
+      hf: {repo: SetFit/sst5, split: test}
+    max_instances: 1000
+
+  # -- OOD / script stress: the Khmer failure mode (confident + wrong) is
+  #    the canonical escalate-gate target --
+  - id: xnli-en
+    domain: nli
+    split: id
+    question_types: [choice]
+    models: [english, multilingual, typed_decisions, router]
+    source: hf
+    processor: xnli
+    dataset:
+      hf: {repo: facebook/xnli, config: en, split: test}
+    max_instances: 1000
+
+  - id: xnli-khmer-ood
+    domain: nli
+    split: novelty
+    question_types: [choice]
+    models: [english, multilingual, typed_decisions, router]
+    source: hf
+    processor: xnli
+    dataset:
+      hf: {repo: facebook/xnli, config: khmer, split: test}
+    max_instances: 1000
+
+# -- local hooks: data lands in evaldata/ and these cells activate the moment
+#    the files exist (see evaldata/README.md for the row format) --
+#  - id: domains-6
+#    domain: six-domains
+#    split: id
+#    question_types: [choice, score, noul]
+#    models: [english, typed_decisions, router]
+#    source: local
+#    dataset: {local: {file: evaldata/domains.jsonl}}
+#  - id: novelty-split
+#    domain: novelty
+#    split: novelty
+#    question_types: [choice, score, noul]
+#    models: [english, typed_decisions, router]
+#    source: local
+#    dataset: {local: {file: evaldata/novelty.jsonl}}
+#  - id: ordinal-rubrics
+#    domain: ordinal-rubrics
+#    split: id
+#    question_types: [score]
+#    models: [english, typed_decisions, router]
+#    source: local
+#    dataset: {local: {file: evaldata/ordinal_rubrics.jsonl}}
