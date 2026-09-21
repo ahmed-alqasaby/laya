@@ -332,6 +332,7 @@ def run_grid(
     model_registry: dict,
     device: Optional[str] = None,
     variants: Optional[list[str]] = None,
+    force_variants: Optional[list[str]] = None,
     perm_sample: int = 200,
     seed: int = 0,
 ) -> tuple[list[ReportRow], list[str]]:
@@ -341,7 +342,9 @@ def run_grid(
     rows: list[ReportRow] = []
     skipped: list[str] = []
     for cell in cells:
-        if variants:
+        if force_variants:
+            cell_models = list(force_variants)
+        elif variants:
             cell_models = [m for m in cell.models if m in variants]
         else:
             cell_models = cell.models
@@ -389,7 +392,7 @@ def write_artifacts(outdir: str, rows: list[ReportRow], skipped: list[str], extr
             p = os.path.join(outdir, name)
             if os.path.exists(p):
                 z.write(p, arcname=name)
-        for extra_name in ("probe.jsonl", "sample_predictions.jsonl"):
+        for extra_name in ("probe.jsonl", "sample_predictions.jsonl", "telemetry.jsonl"):
             p = os.path.join(outdir, extra_name)
             if os.path.exists(p):
                 z.write(p, arcname=extra_name)
